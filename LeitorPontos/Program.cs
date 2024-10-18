@@ -107,8 +107,8 @@ internal class Program
                 Console.WriteLine("------------------------");
                 foreach (var dado in dados)
                 {
-                    if (DateTime.TryParse(dado["InicioAlmoco"].ToString(), out DateTime horarioInicio) &&
-                        DateTime.TryParse(dado["FimAlmoco"].ToString(), out DateTime horarioFim))
+                    if (DateTime.TryParse(dado["InicioAlmoco"].ToString(), out DateTime horarioInicio) != false &&
+                        DateTime.TryParse(dado["FimAlmoco"].ToString(), out DateTime horarioFim) != false)
                     {
                         TimeSpan diferenca = horarioFim - horarioInicio;
 
@@ -183,28 +183,40 @@ internal class Program
                     {
 
                         TimeSpan diferenca;
+                        TimeSpan diferenca2;
                         // Dois pontos iguais ou com diferença muito próxima
                         diferenca = segundoPonto - primeiroPonto;
+                        diferenca2 = quartoPonto - terceiroPonto;
                         if (diferenca.TotalMinutes <= 60)
                         {
                             Console.WriteLine($"""
-                        Dois pontos com diferença menor do que 1h:
-                        Funcionario: {dado["NomeFuncionario"]}
-                        Matricula: {dado["CodigoFuncionario"]}
-                        Posto: {dado["PostoFuncionario"]}.
-                        ------------------------
-                        """);
+                            Dois pontos com diferença menor do que 1h:
+                            Funcionario: {dado["NomeFuncionario"]}
+                            Matricula: {dado["CodigoFuncionario"]}
+                            Posto: {dado["PostoFuncionario"]}.
+                            ------------------------
+                            """);
                         }
                         // Horarios repitidos
                         if (terceiroPonto == quartoPonto)
                         {
                             Console.WriteLine($"""
-                        Ponto repetido:
-                        Funcionario: {dado["NomeFuncionario"]}
-                        Matricula: {dado["CodigoFuncionario"]}
-                        Posto: {dado["PostoFuncionario"]}.
-                        ------------------------
-                        """);
+                            Ponto repetido:
+                            Funcionario: {dado["NomeFuncionario"]}
+                            Matricula: {dado["CodigoFuncionario"]}
+                            Posto: {dado["PostoFuncionario"]}.
+                            ------------------------
+                            """);
+                        }
+                        if(diferenca2.TotalMinutes <= 60)
+                        {
+                            Console.WriteLine($"""
+                            Dois pontos com diferença menor do que 1h:
+                            Funcionario: {dado["NomeFuncionario"]}
+                            Matricula: {dado["CodigoFuncionario"]}
+                            Posto: {dado["PostoFuncionario"]}.
+                            ------------------------
+                            """);
                         }
                     }
                 }
