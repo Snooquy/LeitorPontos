@@ -1,4 +1,5 @@
-﻿using System.Data;
+﻿using System.Collections.Generic;
+using System.Data;
 using System.IO;
 using System.Text;
 using System.Xml;
@@ -23,8 +24,12 @@ internal class Program
             return;
         }
 
+        // VARIAVEIS NECESSARIAS
         var dados = ler_excel(caminho_arquivos);
         int escolha;
+        var funcionarios_listados = new List<Dictionary<string, object>>();
+
+
         Console.WriteLine("Arquivo lido com sucesso.");
         Console.ReadKey();
         Console.Clear();
@@ -33,18 +38,22 @@ internal class Program
         {
             Console.WriteLine("""
                 O que gostaria de listar?
-                [1] - Almoços menores do que 55 minutos.
-                [2] - Pontos impares.
-                [3] - Pontos repetidos / diferença muito pequena.
-                [4] - Funcionarios sem horario de almoço.
+                [1] - Localiza - DF
+                [2] - Localiza - ES
+                [3] - Localiza - GO
+                [4] - Localiza - MG
+                [5] - Localiza - MT
+                [6] - Localiza - MTS
+                [7] - Localiza - RJ
+                [8] - Localiza - SP
+                [9] - Localiza - TO
+                [10] - MOVIDA - MOVIMENTAÇÃO BA
+                [11] - MOVIDA - MOVIMENTACAO SP
                 [0] - Sair
                 """);
             escolha = int.Parse(Console.ReadLine()!);
-            if (escolha == 1) { comparar_almocos(dados); }
-            if (escolha == 2) { pontos_impares(dados); }
-            if (escolha == 3) { horario_igual(dados); }
-            if (escolha == 4) { sem_almoco(dados); }
             if (escolha == 0) { break; }
+            listar(escolha, dados);
         }
 
         List<Dictionary<string, object>> ler_excel(string caminho_arquivos)
@@ -99,7 +108,7 @@ internal class Program
         }
 
 
-        void comparar_almocos(List<Dictionary<String, object>> dados)
+        void comparar_almocos(List<Dictionary<String, object>> dados,string posto)
         {
             if (dados != null)
             {
@@ -107,17 +116,25 @@ internal class Program
                 Console.WriteLine("------------------------");
                 foreach (var dado in dados)
                 {
-                    if (DateTime.TryParse(dado["InicioAlmoco"].ToString(), out DateTime horarioInicio) != false &&
-                        DateTime.TryParse(dado["FimAlmoco"].ToString(), out DateTime horarioFim) != false)
+                    if (dado["PostoFuncionario"].ToString() == posto)
                     {
-                        TimeSpan diferenca = horarioFim - horarioInicio;
-
-                        if (diferenca.TotalMinutes < 55)
+                        // VERIFICA SE O FUNCIONARIO JA FOI LISTADO ANTES
+                        if (!funcionarios_listados.Any(f => f["CodigoFuncionario"].ToString() == dado["CodigoFuncionario"].ToString()))
                         {
-                            Console.WriteLine($"Funcionario: {dado["NomeFuncionario"]} \n Matricula: {dado["CodigoFuncionario"]} \n Posto: {dado["PostoFuncionario"]}.");
-                            Console.WriteLine("------------------------");
-                        }
+                            if (DateTime.TryParse(dado["InicioAlmoco"].ToString(), out DateTime horarioInicio) != false &&
+                            DateTime.TryParse(dado["FimAlmoco"].ToString(), out DateTime horarioFim) != false)
+                            {
+                                TimeSpan diferenca = horarioFim - horarioInicio;
 
+                                if (diferenca.TotalMinutes < 55)
+                                {
+                                    Console.WriteLine($"Funcionario: {dado["NomeFuncionario"]} \n Matricula: {dado["CodigoFuncionario"]} \n Posto: {dado["PostoFuncionario"]}.");
+                                    Console.WriteLine("------------------------");
+                                    funcionarios_listados.Add(dado);
+                                }
+
+                            }
+                        }
                     }
                 }
                 Console.WriteLine("Fim dos erros no almoço");
@@ -125,129 +142,166 @@ internal class Program
             }
         }
 
-        void pontos_impares(List<Dictionary<String, object>> dados)
+        void pontos_impares(List<Dictionary<String, object>> dados, string posto)
         {
             if (dados != null) 
             {
                 Console.WriteLine("Pontos impares.");
                 Console.WriteLine("------------------------");
-                foreach(var dado in dados)
+                foreach (var dado in dados)
                 {
-                 // Ponto impar com um ponto
-                    if (DateTime.TryParse(dado["PrimeiroPonto"].ToString(), out DateTime primeiroPonto) != false && DateTime.TryParse(dado["InicioAlmoco"].ToString(), out DateTime segundoPonto) == false)
+                    if (posto == dado["PostoFuncionario"].ToString())
                     {
-                        Console.WriteLine($"""
+                        if (!funcionarios_listados.Any(f => f["CodigoFuncionario"].ToString() == dado["CodigoFuncionario"].ToString()))
+                        {
+                            // Ponto impar com um ponto
+                            if (DateTime.TryParse(dado["PrimeiroPonto"].ToString(), out DateTime primeiroPonto) != false && DateTime.TryParse(dado["InicioAlmoco"].ToString(), out DateTime segundoPonto) == false)
+                            {
+                                Console.WriteLine($"""
                         Apenas uma marcação:
                         Funcionario: {dado["NomeFuncionario"]}
                         Matricula: {dado["CodigoFuncionario"]}
                         Posto: {dado["PostoFuncionario"]}.
                         ------------------------
                         """);
-                    }
-                    // Ponto impar com 3 marcacoes
-                    else if (DateTime.TryParse(dado["FimAlmoco"].ToString(), out DateTime terceiroPonto) != false && DateTime.TryParse(dado["QuartoPonto"].ToString(), out DateTime quartoPonto) == false)
-                    {
-                        Console.WriteLine($"""
+                                funcionarios_listados.Add(dado);
+                            }
+                            // Ponto impar com 3 marcacoes
+                            else if (DateTime.TryParse(dado["FimAlmoco"].ToString(), out DateTime terceiroPonto) != false && DateTime.TryParse(dado["QuartoPonto"].ToString(), out DateTime quartoPonto) == false)
+                            {
+                                Console.WriteLine($"""
                         Tres marcacoes:
                         Funcionario: {dado["NomeFuncionario"]}
                         Matricula: {dado["CodigoFuncionario"]}
                         Posto: {dado["PostoFuncionario"]}.
                         ------------------------
                         """);
-                    }else if(DateTime.TryParse(dado["QuintoPonto"].ToString(), out DateTime quintoPonto) != false)
-                    {
-                       Console.WriteLine($"""
+                                funcionarios_listados.Add(dado);
+                            }
+                            else if (DateTime.TryParse(dado["QuintoPonto"].ToString(), out DateTime quintoPonto) != false)
+                            {
+                                Console.WriteLine($"""
                        Cinco marcacoes ou mais:
                        Funcionario: {dado["NomeFuncionario"]}
                        Matricula: {dado["CodigoFuncionario"]}
                        Posto: {dado["PostoFuncionario"]}.
                        ------------------------
-                      """);
+                       """);
+                                funcionarios_listados.Add(dado);
+                            }
+                        }
                     }
                 }
             }
         }
 
-        void horario_igual(List<Dictionary<String, object>> dados)
+        void horario_igual(List<Dictionary<String, object>> dados, string posto)
         {
             if (dados != null) 
             {
                 Console.WriteLine("Pontos com horarios iguais.");
                 Console.WriteLine("------------------------");
-                foreach (var dado in dados) 
+                foreach (var dado in dados)
                 {
-                    if (DateTime.TryParse(dado["PrimeiroPonto"].ToString(), out DateTime primeiroPonto) != false &&
-                    DateTime.TryParse(dado["InicioAlmoco"].ToString(), out DateTime segundoPonto) != false &&
-                    DateTime.TryParse(dado["FimAlmoco"].ToString(), out DateTime terceiroPonto) != false &&
-                    DateTime.TryParse(dado["QuartoPonto"].ToString(), out DateTime quartoPonto) != false)
+                    if (posto == dado["PostoFuncionario"].ToString())
                     {
+                        if (!funcionarios_listados.Any(f => f["CodigoFuncionario"].ToString() == dado["CodigoFuncionario"].ToString()))
+                        {
+                            if (DateTime.TryParse(dado["PrimeiroPonto"].ToString(), out DateTime primeiroPonto) != false &&
+                                DateTime.TryParse(dado["InicioAlmoco"].ToString(), out DateTime segundoPonto) != false &&
+                                DateTime.TryParse(dado["FimAlmoco"].ToString(), out DateTime terceiroPonto) != false &&
+                                DateTime.TryParse(dado["QuartoPonto"].ToString(), out DateTime quartoPonto) != false)
+                            {
 
-                        TimeSpan diferenca;
-                        TimeSpan diferenca2;
-                        // Dois pontos iguais ou com diferença muito próxima
-                        diferenca = segundoPonto - primeiroPonto;
-                        diferenca2 = quartoPonto - terceiroPonto;
-                        if (diferenca.TotalMinutes <= 60)
-                        {
-                            Console.WriteLine($"""
-                            Dois pontos com diferença menor do que 1h:
+                                TimeSpan diferenca;
+                                TimeSpan diferenca2;
+                                // Dois pontos iguais ou com diferença muito próxima
+                                diferenca = segundoPonto - primeiroPonto;
+                                diferenca2 = quartoPonto - terceiroPonto;
+                                if (diferenca.TotalMinutes <= 60)
+                                {
+                                    Console.WriteLine($"""
+                            Primeiro ponto muito proximo do segundo:
                             Funcionario: {dado["NomeFuncionario"]}
                             Matricula: {dado["CodigoFuncionario"]}
                             Posto: {dado["PostoFuncionario"]}.
                             ------------------------
                             """);
-                        }
-                        // Horarios repitidos
-                        if (terceiroPonto == quartoPonto)
-                        {
-                            Console.WriteLine($"""
-                            Ponto repetido:
+                                    funcionarios_listados.Add(dado);
+                                }
+
+                                else if (diferenca2.TotalMinutes <= 60)
+                                {
+                                    Console.WriteLine($"""
+                            Terceiro ponto muito proximo do quarto:
                             Funcionario: {dado["NomeFuncionario"]}
                             Matricula: {dado["CodigoFuncionario"]}
                             Posto: {dado["PostoFuncionario"]}.
                             ------------------------
                             """);
-                        }
-                        if(diferenca2.TotalMinutes <= 60)
-                        {
-                            Console.WriteLine($"""
-                            Dois pontos com diferença menor do que 1h:
-                            Funcionario: {dado["NomeFuncionario"]}
-                            Matricula: {dado["CodigoFuncionario"]}
-                            Posto: {dado["PostoFuncionario"]}.
-                            ------------------------
-                            """);
+                                    funcionarios_listados.Add(dado);
+                                }
+                            }
                         }
                     }
                 }
             }
         }
 
-        void sem_almoco(List<Dictionary<String, object>> dados)
+        void sem_almoco(List<Dictionary<String, object>> dados, string posto)
         {
             if (dados != null)
             {
                 Console.WriteLine("Pontos sem almoco");
                 Console.WriteLine("------------------------");
-                foreach(var dado in dados)
+                foreach (var dado in dados)
                 {
-                    if(DateTime.TryParse(dado["PrimeiroPonto"].ToString(), out DateTime primeiroPonto) != false && DateTime.TryParse(dado["InicioAlmoco"].ToString(), out DateTime segundoPonto) != false &&
-                       DateTime.TryParse(dado["FimAlmoco"].ToString(), out DateTime terceiroPonto) == false)
+                    if (dado["PostoFuncionario"].ToString() == posto)
                     {
-                        TimeSpan diferenca = segundoPonto - primeiroPonto;
-                        if(diferenca.TotalMinutes > 405)
+                        if (!funcionarios_listados.Any(f => f["CodigoFuncionario"].ToString() == dado["CodigoFuncionario"].ToString()))
                         {
-                            Console.WriteLine($"""
+                            if (DateTime.TryParse(dado["PrimeiroPonto"].ToString(), out DateTime primeiroPonto) != false && DateTime.TryParse(dado["InicioAlmoco"].ToString(), out DateTime segundoPonto) != false &&
+                           DateTime.TryParse(dado["FimAlmoco"].ToString(), out DateTime terceiroPonto) == false)
+                            {
+                                TimeSpan diferenca = segundoPonto - primeiroPonto;
+                                if (diferenca.TotalMinutes > 405)
+                                {
+                                    Console.WriteLine($"""
                             Sem horario de almoco:
                             Funcionario: {dado["NomeFuncionario"]}
                             Matricula: {dado["CodigoFuncionario"]}
                             Posto: {dado["PostoFuncionario"]}.
                             ------------------------
                             """);
+                                    funcionarios_listados.Add(dado);
+                                }
+                            }
                         }
                     }
                 }
             }
+        }
+
+        void listar(int escolha, List<Dictionary<String, object>> dados)
+        {
+            Dictionary<int, string> postos = new Dictionary<int, string>{
+                { 1, "Localiza - DF" },
+                { 2, "Localiza - ES" },
+                { 3, "Localiza - GO" },
+                { 4, "Localiza - MG" },
+                { 5, "Localiza - MT" },
+                { 6, "Localiza - MTS" },
+                { 7, "Localiza - RJ" },
+                { 8, "Localiza - SP" },
+                { 9, "Localiza - TO" },
+                { 10, "MOVIDA - MOVIMENTAÇÃO BA" },
+                { 11, "MOVIDA - MOVIMENTACAO SP" }
+            };
+            string escolha_posto = postos[escolha].ToUpper();
+            comparar_almocos(dados, escolha_posto);
+            pontos_impares(dados, escolha_posto);
+            horario_igual(dados, escolha_posto);
+            sem_almoco(dados, escolha_posto);
         }
     }
 }
