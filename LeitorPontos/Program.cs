@@ -218,7 +218,7 @@ internal class Program
                                 // Dois pontos iguais ou com diferença muito próxima
                                 diferenca = segundoPonto - primeiroPonto;
                                 diferenca2 = quartoPonto - terceiroPonto;
-                                if (diferenca.TotalMinutes <= 60)
+                                if (diferenca.TotalMinutes <= 60 && diferenca.TotalMinutes >= 0)
                                 {
                                     Console.WriteLine($"""
                             Primeiro ponto muito proximo do segundo:
@@ -230,7 +230,7 @@ internal class Program
                                     funcionarios_listados.Add(dado);
                                 }
 
-                                else if (diferenca2.TotalMinutes <= 60)
+                                else if (diferenca2.TotalMinutes <= 60 && diferenca2.TotalMinutes >= 0)
                                 {
                                     Console.WriteLine($"""
                             Terceiro ponto muito proximo do quarto:
