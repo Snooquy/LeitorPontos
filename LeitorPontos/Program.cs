@@ -1,307 +1,203 @@
-﻿using System.Collections.Generic;
+﻿using ExcelDataReader;
+using OfficeOpenXml;
+using System.ComponentModel;
 using System.Data;
-using System.IO;
 using System.Text;
-using System.Xml;
-using ExcelDataReader;
 
-internal class Program
+internal partial class Program
 {
     private static void Main(string[] args)
     {
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+
         if (args.Length == 0)
         {
-            Console.WriteLine("Por favor, forneca o caminho do arquivo.");
+            Console.WriteLine("Por favor, forneça o caminho do arquivo.");
             return;
         }
 
         string caminho_arquivos = args[0];
+        string caminho_saida = @"C:\Users\isnoo\OneDrive\Documentos\Erros\ErrosPontos.xlsx";
 
         if (!File.Exists(caminho_arquivos))
         {
-            Console.WriteLine($"O arquivo no caminho {caminho_arquivos} nao foi encontrado");
+            Console.WriteLine($"O arquivo no caminho {caminho_arquivos} não foi encontrado.");
             return;
         }
 
-        // VARIAVEIS NECESSARIAS
-        var dados = ler_excel(caminho_arquivos);
-        int escolha;
-        var funcionarios_listados = new List<Dictionary<string, object>>();
+        // Carrega os dados e realiza as análises
+        var dados = LerExcel(caminho_arquivos);
+        Console.WriteLine($"Total de registros lidos: {dados.Count}");
 
-
-        Console.WriteLine("Arquivo lido com sucesso.");
-        Console.ReadKey();
-        Console.Clear();
-
-        while (true)
+        if (dados.Count == 0)
         {
-            Console.WriteLine("""
-                O que gostaria de listar?
-                [1] - Localiza - DF
-                [2] - Localiza - ES
-                [3] - Localiza - GO
-                [4] - Localiza - MG
-                [5] - Localiza - MT
-                [6] - Localiza - MTS
-                [7] - Localiza - RJ
-                [8] - Localiza - SP
-                [9] - Localiza - TO
-                [10] - MOVIDA - MOVIMENTAÇÃO BA
-                [11] - MOVIDA - MOVIMENTACAO SP
-                [0] - Sair
-                """);
-            escolha = int.Parse(Console.ReadLine()!);
-            if (escolha == 0) { break; }
-            listar(escolha, dados);
+            Console.WriteLine("Nenhum dado foi lido do arquivo Excel.");
+            return;
         }
 
-        List<Dictionary<string, object>> ler_excel(string caminho_arquivos)
+        var funcionariosListados = new List<Dictionary<string, object>>();
+        AnalisarErros(dados, funcionariosListados);
+
+        if (funcionariosListados.Count == 0)
         {
-            var rowsList = new List<Dictionary<string, object>>();
+            Console.WriteLine("Nenhum erro encontrado para gerar a planilha.");
+            return;
+        }
 
-            try
+        // Gera a nova planilha com os erros
+        GerarPlanilhaErros(funcionariosListados, caminho_saida);
+        Console.WriteLine("Planilha de erros gerada com sucesso.");
+        Console.ReadKey(); // Mover para o final para ver a última mensagem
+    }
+
+    private static List<Dictionary<string, object>> LerExcel(string caminhoArquivos)
+    {
+        var rowsList = new List<Dictionary<string, object>>();
+
+        try
+        {
+            using (var stream = File.Open(caminhoArquivos, FileMode.Open, FileAccess.Read))
             {
-                using (var stream = File.Open(caminho_arquivos, FileMode.Open, FileAccess.Read))
+                using (var reader = ExcelReaderFactory.CreateReader(stream))
                 {
-                    // Configura a leitura
-                    using (var reader = ExcelReaderFactory.CreateBinaryReader(stream)) // Para XLS use CreateBinaryReader
+                    var result = reader.AsDataSet(new ExcelDataSetConfiguration()
                     {
-                        // Configura as opções para retornar o DataSet
-                        var result = reader.AsDataSet(new ExcelDataSetConfiguration()
+                        ConfigureDataTable = (_) => new ExcelDataTableConfiguration()
                         {
-                            ConfigureDataTable = (_) => new ExcelDataTableConfiguration()
-                            {
-                                UseHeaderRow = true // Se o arquivo tiver cabeçalho
-                            }
-                        });
+                            UseHeaderRow = true
+                        }
+                    });
 
-                        // Percorre as tabelas e dados do arquivo
-                        foreach (DataTable table in result.Tables)
+                    foreach (DataTable table in result.Tables)
+                    {
+                        foreach (DataRow row in table.Rows)
                         {
-                            foreach (DataRow row in table.Rows)
+                            var rowDict = new Dictionary<string, object>
                             {
-                                var rowDict = new Dictionary<string, object>();
+                                ["NomeFuncionario"] = row[4],
+                                ["CodigoFuncionario"] = row[3],
+                                ["PostoFuncionario"] = row[5],
+                                ["Escala"] = row[6],
+                                ["PrimeiroPonto"] = row[9],
+                                ["InicioAlmoco"] = row[10],
+                                ["FimAlmoco"] = row[11],
+                                ["QuartoPonto"] = row[12],
+                                ["QuintoPonto"] = row[13]
+                            };
 
-
-                                rowDict["NomeFuncionario"] = row[4];
-                                rowDict["CodigoFuncionario"] = row[3];
-                                rowDict["PostoFuncionario"] = row[5];
-                                rowDict["PrimeiroPonto"] = row[9];
-                                rowDict["InicioAlmoco"] = row[10];
-                                rowDict["FimAlmoco"] = row[11];
-                                rowDict["QuartoPonto"] = row[12];
-                                rowDict["QuintoPonto"] = row[13];
-
-                                rowsList.Add(rowDict);
-                            }
+                            rowsList.Add(rowDict);
                         }
                     }
                 }
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Erro ao ler o arquivo: {ex.Message}");
-            }
-
-            return rowsList; // Retorna a lista de dicionários
+            Console.WriteLine("Arquivo lido com sucesso!");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Erro ao ler o arquivo: {ex.Message}");
         }
 
+        return rowsList;
+    }
 
-        void comparar_almocos(List<Dictionary<String, object>> dados,string posto)
+    private static List<Dictionary<string, object>> AnalisarErros(List<Dictionary<string, object>> dados, List<Dictionary<string, object>> funcionariosListados)
+    {
+        foreach (var dado in dados)
         {
-            if (dados != null)
+            string? erro = null;
+
+            // Verificar almoços menores de 55 minutos e maiores de 126 minutos
+            if (DateTime.TryParse(dado["InicioAlmoco"].ToString(), out DateTime inicioAlmoco) &&
+                DateTime.TryParse(dado["FimAlmoco"].ToString(), out DateTime fimAlmoco))
             {
-                Console.WriteLine("Almoços menores do que 55 minutos.");
-                Console.WriteLine("------------------------");
-                foreach (var dado in dados)
+                TimeSpan diferenca = fimAlmoco - inicioAlmoco;
+                if ((diferenca.TotalMinutes < 55 && diferenca.TotalMinutes >= 0) || diferenca.TotalMinutes > 126)
                 {
-                    if (dado["PostoFuncionario"].ToString() == posto)
-                    {
-                        // VERIFICA SE O FUNCIONARIO JA FOI LISTADO ANTES
-                        if (!funcionarios_listados.Any(f => f["CodigoFuncionario"].ToString() == dado["CodigoFuncionario"].ToString()))
-                        {
-                            if (DateTime.TryParse(dado["InicioAlmoco"].ToString(), out DateTime horarioInicio) != false &&
-                            DateTime.TryParse(dado["FimAlmoco"].ToString(), out DateTime horarioFim) != false)
-                            {
-                                TimeSpan diferenca = horarioFim - horarioInicio;
-
-                                if (diferenca.TotalMinutes < 55)
-                                {
-                                    Console.WriteLine($"Funcionario: {dado["NomeFuncionario"]} \n Matricula: {dado["CodigoFuncionario"]} \n Posto: {dado["PostoFuncionario"]}.");
-                                    Console.WriteLine("------------------------");
-                                    funcionarios_listados.Add(dado);
-                                }
-
-                            }
-                        }
-                    }
-                }
-                Console.WriteLine("Fim dos erros no almoço");
-                Console.WriteLine("------------------------");
-            }
-        }
-
-        void pontos_impares(List<Dictionary<String, object>> dados, string posto)
-        {
-            if (dados != null) 
-            {
-                Console.WriteLine("Pontos impares.");
-                Console.WriteLine("------------------------");
-                foreach (var dado in dados)
-                {
-                    if (posto == dado["PostoFuncionario"].ToString())
-                    {
-                        if (!funcionarios_listados.Any(f => f["CodigoFuncionario"].ToString() == dado["CodigoFuncionario"].ToString()))
-                        {
-                            // Ponto impar com um ponto
-                            if (DateTime.TryParse(dado["PrimeiroPonto"].ToString(), out DateTime primeiroPonto) != false && DateTime.TryParse(dado["InicioAlmoco"].ToString(), out DateTime segundoPonto) == false)
-                            {
-                                Console.WriteLine($"""
-                        Apenas uma marcação:
-                        Funcionario: {dado["NomeFuncionario"]}
-                        Matricula: {dado["CodigoFuncionario"]}
-                        Posto: {dado["PostoFuncionario"]}.
-                        ------------------------
-                        """);
-                                funcionarios_listados.Add(dado);
-                            }
-                            // Ponto impar com 3 marcacoes
-                            else if (DateTime.TryParse(dado["FimAlmoco"].ToString(), out DateTime terceiroPonto) != false && DateTime.TryParse(dado["QuartoPonto"].ToString(), out DateTime quartoPonto) == false)
-                            {
-                                Console.WriteLine($"""
-                        Tres marcacoes:
-                        Funcionario: {dado["NomeFuncionario"]}
-                        Matricula: {dado["CodigoFuncionario"]}
-                        Posto: {dado["PostoFuncionario"]}.
-                        ------------------------
-                        """);
-                                funcionarios_listados.Add(dado);
-                            }
-                            else if (DateTime.TryParse(dado["QuintoPonto"].ToString(), out DateTime quintoPonto) != false)
-                            {
-                                Console.WriteLine($"""
-                       Cinco marcacoes ou mais:
-                       Funcionario: {dado["NomeFuncionario"]}
-                       Matricula: {dado["CodigoFuncionario"]}
-                       Posto: {dado["PostoFuncionario"]}.
-                       ------------------------
-                       """);
-                                funcionarios_listados.Add(dado);
-                            }
-                        }
-                    }
+                    erro = "Duração do almoço fora do intervalo.";
                 }
             }
-        }
 
-        void horario_igual(List<Dictionary<String, object>> dados, string posto)
-        {
-            if (dados != null) 
+            // Verificar pontos ímpares (1, 3, ou 5 marcações)
+            int marcacoes = new[] { dado["PrimeiroPonto"], dado["InicioAlmoco"], dado["FimAlmoco"], dado["QuartoPonto"], dado["QuintoPonto"] }
+                .Count(x => DateTime.TryParse(x?.ToString(), out _));
+
+            if (marcacoes == 1 || marcacoes == 3 || marcacoes >= 5)
             {
-                Console.WriteLine("Pontos com horarios iguais.");
-                Console.WriteLine("------------------------");
-                foreach (var dado in dados)
+                erro = "Número de marcações ímpares.";
+            }
+
+            // Verificar pontos com horários muito próximos (menos de 50 minutos de intervalo)
+            if (DateTime.TryParse(dado["PrimeiroPonto"].ToString(), out DateTime primeiroPonto) &&
+                DateTime.TryParse(dado["InicioAlmoco"].ToString(), out DateTime segundoPonto) &&
+                DateTime.TryParse(dado["FimAlmoco"].ToString(), out DateTime terceiroPonto) &&
+                DateTime.TryParse(dado["QuartoPonto"].ToString(), out DateTime quartoPonto))
+            {
+                if ((segundoPonto - primeiroPonto).TotalMinutes <= 50 || (quartoPonto - terceiroPonto).TotalMinutes <= 50)
                 {
-                    if (posto == dado["PostoFuncionario"].ToString())
-                    {
-                        if (!funcionarios_listados.Any(f => f["CodigoFuncionario"].ToString() == dado["CodigoFuncionario"].ToString()))
-                        {
-                            if (DateTime.TryParse(dado["PrimeiroPonto"].ToString(), out DateTime primeiroPonto) != false &&
-                                DateTime.TryParse(dado["InicioAlmoco"].ToString(), out DateTime segundoPonto) != false &&
-                                DateTime.TryParse(dado["FimAlmoco"].ToString(), out DateTime terceiroPonto) != false &&
-                                DateTime.TryParse(dado["QuartoPonto"].ToString(), out DateTime quartoPonto) != false)
-                            {
-
-                                TimeSpan diferenca;
-                                TimeSpan diferenca2;
-                                // Dois pontos iguais ou com diferença muito próxima
-                                diferenca = segundoPonto - primeiroPonto;
-                                diferenca2 = quartoPonto - terceiroPonto;
-                                if (diferenca.TotalMinutes <= 60 && diferenca.TotalMinutes >= 0)
-                                {
-                                    Console.WriteLine($"""
-                            Primeiro ponto muito proximo do segundo:
-                            Funcionario: {dado["NomeFuncionario"]}
-                            Matricula: {dado["CodigoFuncionario"]}
-                            Posto: {dado["PostoFuncionario"]}.
-                            ------------------------
-                            """);
-                                    funcionarios_listados.Add(dado);
-                                }
-
-                                else if (diferenca2.TotalMinutes <= 60 && diferenca2.TotalMinutes >= 0)
-                                {
-                                    Console.WriteLine($"""
-                            Terceiro ponto muito proximo do quarto:
-                            Funcionario: {dado["NomeFuncionario"]}
-                            Matricula: {dado["CodigoFuncionario"]}
-                            Posto: {dado["PostoFuncionario"]}.
-                            ------------------------
-                            """);
-                                    funcionarios_listados.Add(dado);
-                                }
-                            }
-                        }
-                    }
+                    erro = "Intervalo de pontos muito curto.";
                 }
             }
-        }
 
-        void sem_almoco(List<Dictionary<String, object>> dados, string posto)
-        {
-            if (dados != null)
+            // Verificar falta de horário de almoço (intervalo maior que 405 minutos sem almoço)
+            if (DateTime.TryParse(dado["PrimeiroPonto"].ToString(), out primeiroPonto) &&
+                DateTime.TryParse(dado["InicioAlmoco"].ToString(), out segundoPonto) &&
+                !DateTime.TryParse(dado["FimAlmoco"].ToString(), out _))
             {
-                Console.WriteLine("Pontos sem almoco");
-                Console.WriteLine("------------------------");
-                foreach (var dado in dados)
+                if ((segundoPonto - primeiroPonto).TotalMinutes > 405)
                 {
-                    if (dado["PostoFuncionario"].ToString() == posto)
-                    {
-                        if (!funcionarios_listados.Any(f => f["CodigoFuncionario"].ToString() == dado["CodigoFuncionario"].ToString()))
-                        {
-                            if (DateTime.TryParse(dado["PrimeiroPonto"].ToString(), out DateTime primeiroPonto) != false && DateTime.TryParse(dado["InicioAlmoco"].ToString(), out DateTime segundoPonto) != false &&
-                           DateTime.TryParse(dado["FimAlmoco"].ToString(), out DateTime terceiroPonto) == false)
-                            {
-                                TimeSpan diferenca = segundoPonto - primeiroPonto;
-                                if (diferenca.TotalMinutes > 405)
-                                {
-                                    Console.WriteLine($"""
-                            Sem horario de almoco:
-                            Funcionario: {dado["NomeFuncionario"]}
-                            Matricula: {dado["CodigoFuncionario"]}
-                            Posto: {dado["PostoFuncionario"]}.
-                            ------------------------
-                            """);
-                                    funcionarios_listados.Add(dado);
-                                }
-                            }
-                        }
-                    }
+                    erro = "Falta de horário de almoço.";
                 }
             }
-        }
 
-        void listar(int escolha, List<Dictionary<String, object>> dados)
+            if (erro != null)
+            {
+                var funcionarioComErro = new Dictionary<string, object>(dado)
+                {
+                    ["Erro"] = erro
+                };
+                funcionariosListados.Add(funcionarioComErro);
+                Console.WriteLine($"Erro encontrado para {dado["NomeFuncionario"]}: {erro}");
+            }
+        }
+        return funcionariosListados;
+    }
+
+    private static void GerarPlanilhaErros(List<Dictionary<string, object>> funcionariosListados, string caminhoSaida)
+    {
+        using (var package = new ExcelPackage())
         {
-            Dictionary<int, string> postos = new Dictionary<int, string>{
-                { 1, "Localiza - DF" },
-                { 2, "Localiza - ES" },
-                { 3, "Localiza - GO" },
-                { 4, "Localiza - MG" },
-                { 5, "Localiza - MT" },
-                { 6, "Localiza - MTS" },
-                { 7, "Localiza - RJ" },
-                { 8, "Localiza - SP" },
-                { 9, "Localiza - TO" },
-                { 10, "MOVIDA - MOVIMENTAÇÃO BA" },
-                { 11, "MOVIDA - MOVIMENTACAO SP" }
-            };
-            string escolha_posto = postos[escolha].ToUpper();
-            comparar_almocos(dados, escolha_posto);
-            pontos_impares(dados, escolha_posto);
-            horario_igual(dados, escolha_posto);
-            sem_almoco(dados, escolha_posto);
+            var worksheet = package.Workbook.Worksheets.Add("Erros de Pontos");
+
+            // Cabeçalho
+            worksheet.Cells[1, 1].Value = "Nome do Funcionário";
+            worksheet.Cells[1, 2].Value = "Código do Funcionário";
+            worksheet.Cells[1, 3].Value = "Posto";
+            worksheet.Cells[1, 4].Value = "Escala";
+            worksheet.Cells[1, 5].Value = "Primeiro Ponto";
+            worksheet.Cells[1, 6].Value = "Início do Almoço";
+            worksheet.Cells[1, 7].Value = "Fim do Almoço";
+            worksheet.Cells[1, 8].Value = "Quarto Ponto";
+            worksheet.Cells[1, 9].Value = "Quinto Ponto";
+            worksheet.Cells[1, 10].Value = "Erro"; // Nova coluna para erros
+
+            int row = 2;
+
+            foreach (var funcionario in funcionariosListados)
+            {
+                worksheet.Cells[row, 1].Value = funcionario["NomeFuncionario"];
+                worksheet.Cells[row, 2].Value = funcionario["CodigoFuncionario"];
+                worksheet.Cells[row, 3].Value = funcionario["PostoFuncionario"];
+                worksheet.Cells[row, 4].Value = funcionario["Escala"];
+                worksheet.Cells[row, 5].Value = funcionario["PrimeiroPonto"];
+                worksheet.Cells[row, 6].Value = funcionario["InicioAlmoco"];
+                worksheet.Cells[row, 7].Value = funcionario["FimAlmoco"];
+                worksheet.Cells[row, 8].Value = funcionario["QuartoPonto"];
+                worksheet.Cells[row, 9].Value = funcionario["QuintoPonto"];
+                worksheet.Cells[row, 10].Value = funcionario["Erro"]; // Preencher a coluna de erro
+                row++;
+            }
+
+            package.SaveAs(new FileInfo(caminhoSaida));
         }
     }
 }
